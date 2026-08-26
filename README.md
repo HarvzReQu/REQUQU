@@ -125,6 +125,25 @@ hue, because position already carries the magnitude. The one sequential encoding
 is the cohort heatmap, which uses a single blue ramp and prints the number in
 every cell, so colour reinforces rather than carries the value.
 
+## Interface
+
+Depth comes from elevation, spacing rhythm and type hierarchy — never from
+heavier data marks. The dataviz rules that shaped the charts also rule out the
+usual ways a dashboard is "made to pop": no thickened bars, no darkened
+gridlines, no colour ramps standing in for rank.
+
+- **Stat tiles carry sparklines** — an 18-month trend beside each headline
+  figure, deliberately low-contrast so it never competes with the number.
+- **Deltas are pills with an arrow and a sign**, so direction never rests on
+  colour alone. Margin movement is reported in percentage *points*, not percent —
+  40% → 44% is +4pts, and calling it +10% would be a different claim.
+- **Bars and the margin line carry a shallow gradient** of their own hue. It
+  reads as depth without introducing a second colour or implying a second series.
+- **Theme toggle** cycles system → light → dark, applied before first paint by an
+  inline script so a chosen theme never flashes.
+- Reduced-motion is respected; every transition collapses under
+  `prefers-reduced-motion`.
+
 ## Running it
 
 ```bash

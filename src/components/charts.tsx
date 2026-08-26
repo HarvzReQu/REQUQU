@@ -39,6 +39,47 @@ function niceMax(value: number): number {
   return step;
 }
 
+// ───────────────────────────────────────────────────────────── sparkline ───
+/**
+ * Trend inside a stat tile. No axes, no labels, no tooltip - it answers "which
+ * way is this going" at a glance and defers the actual numbers to the chart
+ * below. Deliberately low-contrast so it never competes with the figure it sits
+ * beside.
+ */
+export function Sparkline({
+  values, width = 62, height = 20, tone = "var(--series-1)",
+}: {
+  values: number[];
+  width?: number;
+  height?: number;
+  tone?: string;
+}) {
+  if (values.length < 2) return null;
+  const max = Math.max(...values), min = Math.min(...values);
+  const range = max - min || 1;
+  const x = (i: number) => (i / (values.length - 1)) * (width - 2) + 1;
+  const y = (v: number) => height - 2 - ((v - min) / range) * (height - 4);
+
+  const line = values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${line} L${x(values.length - 1).toFixed(1)},${height} L${x(0).toFixed(1)},${height} Z`;
+  const id = `sp${Math.round(values[0]! * 1e6) % 100000}-${values.length}`;
+
+  return (
+    <svg className="spark" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden>
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={tone} stopOpacity="0.26" />
+          <stop offset="100%" stopColor={tone} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${id})`} />
+      <path d={line} fill="none" stroke={tone} strokeWidth="1.5"
+            strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={x(values.length - 1)} cy={y(values[values.length - 1]!)} r="2" fill={tone} />
+    </svg>
+  );
+}
+
 // ─────────────────────────────────────────────────────────── column chart ───
 export function ColumnChart({
   data, title, note,
@@ -72,6 +113,17 @@ export function ColumnChart({
       <h3 className="card-title">{title}</h3>
       {note && <p className="card-note">{note}</p>}
       <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title}>
+        <defs>
+          {/* A shallow gradient reads as depth without thickening the mark. */}
+          <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--series-1)" />
+            <stop offset="100%" stopColor="var(--series-1)" stopOpacity="0.62" />
+          </linearGradient>
+          <linearGradient id="barNeg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--critical)" stopOpacity="0.62" />
+            <stop offset="100%" stopColor="var(--critical)" />
+          </linearGradient>
+        </defs>
         {ticks.map((t, i) => (
           <g key={i}>
             <line className="grid-line" x1={L} y1={y(t)} x2={W - R} y2={y(t)} />
@@ -93,7 +145,7 @@ export function ColumnChart({
             : `M${x},${top} V${top + h - r} Q${x},${top + h} ${x + r},${top + h} H${x + barW - r} Q${x + barW},${top + h} ${x + barW},${top + h - r} V${top} Z`;
           return (
             <g key={d.label}>
-              <path d={path} fill={d.value >= 0 ? "var(--series-1)" : "var(--critical)"} />
+              <path className="bar" d={path} fill={d.value >= 0 ? "url(#barFill)" : "url(#barNeg)"} />
               {labelled.has(i) && (
                 <text className="mark-label" x={x + barW / 2} y={top - 5} textAnchor="middle">
                   {fmtMoney(d.value, true)}
@@ -139,6 +191,7 @@ export function LineChart({
   const y = (v: number) => T + plotH - ((v - min) / range) * plotH;
 
   const path = data.map((d, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(d.value)}`).join(" ");
+  const area = `${path} L${x(data.length - 1)},${T + plotH} L${x(0)},${T + plotH} Z`;
   const ticks = [0, 0.5, 1].map((f) => min + range * f);
   const last = data.length - 1;
 
@@ -147,6 +200,17 @@ export function LineChart({
       <h3 className="card-title">{title}</h3>
       {note && <p className="card-note">{note}</p>}
       <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title}>
+        <defs>
+          {/* A shallow gradient reads as depth without thickening the mark. */}
+          <linearGradient id="barFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--series-1)" />
+            <stop offset="100%" stopColor="var(--series-1)" stopOpacity="0.62" />
+          </linearGradient>
+          <linearGradient id="barNeg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--critical)" stopOpacity="0.62" />
+            <stop offset="100%" stopColor="var(--critical)" />
+          </linearGradient>
+        </defs>
         {ticks.map((t, i) => (
           <g key={i}>
             <line className="grid-line" x1={L} y1={y(t)} x2={W - R} y2={y(t)} />
@@ -155,6 +219,9 @@ export function LineChart({
             </text>
           </g>
         ))}
+        {/* Area is a fade of the line's own hue - it adds weight to the trend
+            without introducing a second colour or implying a second series. */}
+        <path d={area} fill="url(#lineArea)" />
         {/* 2px stroke, single series, so no legend box is needed - the title names it. */}
         <path d={path} fill="none" stroke="var(--series-2)" strokeWidth="2"
               strokeLinejoin="round" strokeLinecap="round" />
@@ -203,7 +270,6 @@ export function RankedBars({
 }) {
   if (data.length === 0) return null;
   const max = Math.max(...data.map((d) => Math.abs(d.revenue)));
-  const rowH = 30;
 
   return (
     <figure style={{ margin: 0 }}>
@@ -211,28 +277,15 @@ export function RankedBars({
       {note && <p className="card-note">{note}</p>}
       <div>
         {data.map((d) => (
-          <div key={d.key}
-               style={{ display: "grid", gridTemplateColumns: "minmax(7rem,11rem) 1fr auto auto",
-                        gap: ".6rem", alignItems: "center", height: rowH }}>
-            <span style={{ fontSize: ".8rem", color: "var(--ink-2)", overflow: "hidden",
-                           textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                  title={d.key}>
-              {d.key}
-            </span>
-            <span style={{ background: "var(--grid)", borderRadius: "4px", height: "14px", position: "relative" }}>
+          <div key={d.key} className="rank-row">
+            <span className="rank-name" title={d.key}>{d.key}</span>
+            <span className="rank-track">
               {/* One hue for every bar: rank is already encoded by position. */}
-              <span style={{
-                position: "absolute", inset: "0 auto 0 0", borderRadius: "4px",
-                width: `${Math.max(1, (Math.abs(d.revenue) / max) * 100)}%`,
-                background: d.revenue < 0 ? "var(--critical)" : "var(--series-1)",
-              }} />
+              <span className={`rank-fill${d.revenue < 0 ? " neg" : ""}`}
+                    style={{ width: `${Math.max(1, (Math.abs(d.revenue) / max) * 100)}%` }} />
             </span>
-            <span className="mark-label" style={{ fontSize: ".78rem", minWidth: "5rem", textAlign: "right" }}>
-              {fmtMoney(d.revenue, true)}
-            </span>
-            <span style={{ fontSize: ".74rem", color: "var(--muted)", minWidth: "3.4rem",
-                           textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                  title="cumulative share of revenue">
+            <span className="rank-val">{fmtMoney(d.revenue, true)}</span>
+            <span className="rank-cum" title="cumulative share of revenue">
               {fmtPct(d.cumulativeShare * 100, 0)}
             </span>
           </div>
@@ -286,7 +339,7 @@ export function CohortHeatmap({
                 <td style={{ color: "var(--muted)" }}>{c.size}</td>
                 {Array.from({ length: cols }, (_, i) => {
                   const v = c.retention[i];
-                  if (v === undefined) return <td key={i} />;
+                  if (v === undefined) return <td key={i} className="blank" />;
                   const { bg, ink } = cell(v);
                   return (
                     <td key={i} style={{ background: bg, color: ink }}
