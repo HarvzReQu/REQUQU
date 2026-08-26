@@ -1,5 +1,7 @@
 # REQUQU
 
+[![CI](https://github.com/HarvzReQu/REQUQU-Analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/HarvzReQu/REQUQU-Analytics/actions/workflows/ci.yml)
+
 **Sales and revenue analytics for a business, in the browser.**
 
 Upload a sales or invoice CSV — QuickBooks, Xero, MYOB and Excel exports load
