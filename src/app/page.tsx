@@ -13,12 +13,14 @@ export default function Home() {
       </header>
 
       <section className="hero">
-        <h2>Turn a sales export into an answer.</h2>
+        <h2>Drop in a CSV. Get the whole picture.</h2>
         <p>
-          Upload an invoice or sales CSV — QuickBooks, Xero, MYOB and Excel load
-          without configuration. REQUQU reconciles the totals, charts revenue,
-          margin and customer cohorts, and writes up what it found. Everything runs
-          in your browser; no file is uploaded anywhere.
+          REQUQU reads sales, invoice and transaction CSVs — <strong>QuickBooks,
+          Xero, MYOB, Excel and Google Sheets exports load without any setup</strong>.
+          It works out what your columns mean, untangles currency symbols and date
+          formats, reconciles every total, then charts revenue, margin and customer
+          retention and writes up what it found. Nothing is uploaded; the file is
+          read in your browser and never leaves it.
         </p>
       </section>
 

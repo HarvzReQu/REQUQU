@@ -4,9 +4,10 @@
 
 **Sales and revenue analytics for a business, in the browser.**
 
-Upload a sales or invoice CSV — QuickBooks, Xero, MYOB and Excel exports load
-without configuration. REQUQU reconciles the totals, charts revenue and margin,
-builds customer retention cohorts, and writes up what it found.
+**Drop in a CSV — QuickBooks, Xero, MYOB, Excel and Google Sheets exports load
+with no setup.** REQUQU works out what your columns mean, untangles currency
+symbols, accounting negatives and date formats, reconciles every total, then
+charts revenue, margin and customer retention and writes up what it found.
 
 Nothing is uploaded. Parsing and every calculation run client-side, so financial
 data never leaves the machine.
@@ -18,6 +19,25 @@ CSV  ──▶  delimiter sniff  ──▶  column mapping  ──▶  typed tra
                                                             ↓
                           reconciliation  ·  charts  ·  written findings
 ```
+
+## Features
+
+| | |
+|---|---|
+| **Drag-and-drop CSV** | drop a file anywhere on the zone, or browse, or paste raw text |
+| **Automatic column mapping** | header synonyms matched across ~90 known names |
+| **Manual remapping** | every detected column shown and overridable; the analysis recomputes live |
+| **Parsed-row preview** | see exactly what was read out of the file after cleaning |
+| **Period filter** | all time, or the last 3 / 6 / 12 months — every figure follows it |
+| **Headline KPIs** | revenue, gross profit, margin, orders, AOV, customers, repeat rate, each with an 18-month sparkline |
+| **Monthly revenue & margin** | two plots, never one dual-axis chart |
+| **Six breakdown dimensions** | customer, product, category, region, channel, sales rep |
+| **Biggest movers** | last 3 months vs the 3 before, ranked by absolute swing |
+| **Cohort retention** | monthly acquisition cohorts as a heatmap |
+| **Written findings** | concentration risk, margin erosion, loss-making lines, refund rate, retention |
+| **Reconciliation** | every breakdown re-summed against the headline total |
+| **Export** | summary CSV for a spreadsheet, or a written Markdown report |
+| **Light / dark / system** | applied before first paint, no flash |
 
 ## What it produces
 

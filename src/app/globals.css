@@ -329,3 +329,68 @@ footer code { font-family: var(--mono); font-size: .95em; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ─── dropzone ───────────────────────────────────────────────────────────── */
+.dropzone {
+  margin-top: .9rem; padding: 1.6rem 1.2rem; text-align: center; cursor: pointer;
+  border: 2px dashed var(--axis); border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--surface-2), transparent);
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.dropzone:hover, .dropzone:focus-visible {
+  border-color: var(--series-1);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--series-1) 7%, var(--surface-2)), transparent);
+  outline: none;
+}
+.dropzone.over {
+  border-color: var(--series-1); transform: scale(1.006);
+  background: color-mix(in srgb, var(--series-1) 11%, var(--surface));
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--series-1) 12%, transparent);
+}
+.dz-icon { color: var(--series-1); opacity: .85; margin-bottom: .5rem; }
+.dz-main { margin: 0 0 .2rem; font-size: .93rem; color: var(--ink-2); }
+.dz-main strong { color: var(--ink); font-weight: 640; }
+.dz-sub { margin: 0; font-size: .77rem; color: var(--muted); font-family: var(--mono); }
+.dz-badges { display: flex; gap: .35rem; justify-content: center; flex-wrap: wrap; margin-top: .85rem; }
+.badge {
+  font-size: .68rem; font-weight: 600; letter-spacing: .02em;
+  color: var(--ink-2); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 99px; padding: .18rem .55rem;
+}
+
+/* ─── column mapping ─────────────────────────────────────────────────────── */
+.mapping {
+  margin-top: .9rem; padding: .95rem 1rem; border-radius: var(--r-md);
+  background: var(--surface-2); border: 1px solid var(--border-2);
+}
+.map-grid { display: grid; gap: .55rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.map-row { display: flex; flex-direction: column; gap: .22rem; }
+.map-label { font-size: .72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.map-label em { color: var(--critical); font-style: normal; }
+.map-row select { width: 100%; font-size: .8rem; padding: .38rem .5rem; box-shadow: none; }
+
+/* ─── toolbar ────────────────────────────────────────────────────────────── */
+.toolbar {
+  display: flex; gap: .45rem; align-items: center; flex-wrap: wrap;
+  padding: .6rem .8rem; margin-bottom: 1rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-md); box-shadow: var(--shadow-1);
+}
+.chip {
+  font-size: .78rem; padding: .32rem .7rem; border-radius: 99px;
+  background: transparent; box-shadow: none; border: 1px solid var(--border);
+}
+.chip.on {
+  background: var(--series-1); border-color: var(--series-1);
+  color: #fff; font-weight: 600;
+}
+.chip.on:hover { transform: none; }
+
+/* ─── movers ─────────────────────────────────────────────────────────────── */
+.mover {
+  display: grid; grid-template-columns: 1fr auto auto; gap: .6rem;
+  align-items: center; padding: .42rem .4rem; margin: 0 -.4rem;
+  border-radius: 6px; transition: background .14s ease;
+}
+.mover:hover { background: var(--surface-2); }
+.mover .rank-val { min-width: 4.6rem; }

@@ -265,3 +265,66 @@ export function growth(current: number, previous: number): number | null {
   if (previous < 0) return null; // growth off a negative base is meaningless
   return ((current - previous) / previous) * 100;
 }
+
+// ─────────────────────────────────────────────────────── period comparison ───
+export type Mover = {
+  key: string;
+  current: number;
+  previous: number;
+  change: number;
+  /** null when the prior period was zero - growth off nothing is undefined. */
+  changePct: number | null;
+};
+
+/**
+ * Which segments moved, comparing the last N months against the N before them.
+ *
+ * A ranked revenue table says who is big; this says who is *changing*, which is
+ * the question a sales review actually opens with. Multi-month windows rather
+ * than month-on-month because a single month of one segment is mostly noise.
+ */
+export function movers(
+  txns: Txn[],
+  field: "customer" | "product" | "category" | "region" | "channel" | "rep",
+  months = 3,
+): { rows: Mover[]; currentLabel: string; previousLabel: string } | null {
+  const keys = [...new Set(txns.map((t) => monthKey(t.date)))].sort();
+  if (keys.length < months * 2) return null;
+
+  const current = new Set(keys.slice(-months));
+  const previous = new Set(keys.slice(-months * 2, -months));
+
+  const totals = new Map<string, { current: number; previous: number }>();
+  for (const t of txns) {
+    const m = monthKey(t.date);
+    const bucket = current.has(m) ? "current" : previous.has(m) ? "previous" : null;
+    if (!bucket) continue;
+    const entry = totals.get(t[field]) ?? { current: 0, previous: 0 };
+    entry[bucket] += t.revenue;
+    totals.set(t[field], entry);
+  }
+
+  const rows: Mover[] = [...totals.entries()]
+    .map(([key, v]) => ({
+      key,
+      current: v.current,
+      previous: v.previous,
+      change: v.current - v.previous,
+      changePct: growth(v.current, v.previous),
+    }))
+    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+
+  const label = (set: Set<string>) => {
+    const s = [...set].sort();
+    return s.length === 1 ? s[0]! : `${s[0]}…${s[s.length - 1]}`;
+  };
+  return { rows, currentLabel: label(current), previousLabel: label(previous) };
+}
+
+/** Inclusive date-range filter, used by the period control. */
+export function inRange(txns: Txn[], from: Date | null, to: Date | null): Txn[] {
+  if (!from && !to) return txns;
+  return txns.filter(
+    (t) => (!from || t.date >= from) && (!to || t.date <= to),
+  );
+}

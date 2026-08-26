@@ -14,7 +14,8 @@ import assert from "node:assert/strict";
 import { parse, sniffDelimiter } from "@/lib/csv";
 import { toDate, toNumber, inferDayFirst } from "@/lib/coerce";
 import { load } from "@/lib/schema";
-import { computeMetrics, sliceBy, sum, growth, monthKey } from "@/lib/metrics";
+import { computeMetrics, sliceBy, sum, growth, monthKey, movers, inRange } from "@/lib/metrics";
+import { summaryCsv, reportMarkdown } from "@/lib/export";
 import { reconcile, deriveInsights } from "@/lib/insights";
 import { buildSampleCsv } from "@/lib/sample";
 
@@ -197,6 +198,82 @@ const GOLDEN = [
 
   assert.equal(monthKey(new Date(Date.UTC(2026, 0, 9))), "2026-01");
   ok("month keys zero-pad so string sorting is chronological");
+}
+
+// ── 6. Period comparison, filtering and export ──────────────────────────────
+{
+  const csv = buildSampleCsv();
+  const r = load(csv);
+  const m = computeMetrics(r.txns);
+
+  const mv = movers(r.txns, "customer", 3)!;
+  assert.ok(mv, "sample is long enough for a 3v3 month comparison");
+  for (const row of mv.rows) {
+    near(row.change, row.current - row.previous, `${row.key} change is current minus previous`);
+  }
+  // Sorted by absolute movement, so the biggest swing in either direction leads.
+  const magnitudes = mv.rows.map((x) => Math.abs(x.change));
+  assert.deepEqual(magnitudes, [...magnitudes].sort((a, b) => b - a), "movers sorted by magnitude");
+  assert.equal(movers(r.txns, "customer", 99), null, "too short a window returns null, not garbage");
+  ok("period movers: arithmetic, ordering, and insufficient-window guard");
+
+  const span = m.span!;
+  assert.equal(inRange(r.txns, null, null).length, r.txns.length, "no bounds is a no-op");
+  const half = new Date((span.from.getTime() + span.to.getTime()) / 2);
+  const early = inRange(r.txns, null, half);
+  // Split at the very next millisecond, not the next day: a row dated inside
+  // that one-day gap would belong to neither side and the partition would leak.
+  const late = inRange(r.txns, new Date(half.getTime() + 1), null);
+  assert.equal(early.length + late.length, r.txns.length, "range filter partitions without loss");
+  near(sum(early.map((t) => t.revenue)) + sum(late.map((t) => t.revenue)), m.headline.revenue,
+       "partitioned revenue still sums to the total");
+  ok("date-range filter partitions the data without losing rows or revenue");
+
+  // The export must survive being read back by a CSV reader - a customer name
+  // with a comma in it is exactly the case that breaks a naive writer.
+  const exported = summaryCsv(r.txns, m);
+  const widths = new Set(parse(exported).rows.map((row) => row.length));
+  assert.equal(widths.size, 1, `exported CSV is ragged: widths ${[...widths].join(", ")}`);
+  assert.equal([...widths][0], 3, "exported CSV has three columns");
+  assert.ok(exported.includes('"Fabrikam, Inc."'), "comma-bearing name is quoted on export");
+  const revenueRow = parse(exported).rows.find((row) => row[1] === "Revenue")!;
+  near(Number(revenueRow[2]), m.headline.revenue, "exported revenue matches the computed figure");
+  ok("summary CSV round-trips through a CSV reader with values intact");
+
+  const report = reportMarkdown(m, deriveInsights(r.txns, m), reconcile(r.txns, m));
+  assert.ok(report.startsWith("# Sales performance summary"), "report has a heading");
+  assert.ok(report.includes("## Findings") && report.includes("## Reconciliation"), "report has both sections");
+  ok("markdown report contains headline, findings and reconciliation");
+}
+
+// ── 7. Manual column remapping ──────────────────────────────────────────────
+{
+  // Headers no synonym list could guess - the case the mapping UI exists for.
+  const opaque = [
+    "col_a,col_b,col_c,col_d",
+    '2026-01-10,ACME,"$500.00","$200.00"',
+    '2026-01-20,BETA,"$300.00","$120.00"',
+  ].join("\n");
+
+  const guessed = load(opaque);
+  assert.ok(guessed.error, "opaque headers are reported rather than silently misread");
+
+  const mapped = load(opaque, {
+    date: "col_a", customer: "col_b", revenue: "col_c", cost: "col_d",
+  });
+  assert.equal(mapped.error, null, "explicit mapping rescues the file");
+  assert.equal(mapped.txns.length, 2);
+  const m = computeMetrics(mapped.txns);
+  near(m.headline.revenue, 800, "remapped revenue");
+  near(m.headline.cost!, 320, "remapped cost");
+  near(m.headline.marginPct!, 60, "remapped margin");
+  ok("manual column mapping overrides inference and recomputes correctly");
+
+  // An override must win even when inference already found something.
+  const swapped = load(GOLDEN, { revenue: "Unit Price" });
+  const sm = computeMetrics(swapped.txns);
+  near(sm.headline.revenue, 100 + 50 + 100 + 400 + 50, "override beats the inferred column");
+  ok("an explicit override takes precedence over a successful guess");
 }
 
 console.log(`\n  ${passed} checks passed\n`);
