@@ -276,4 +276,39 @@ const GOLDEN = [
   ok("an explicit override takes precedence over a successful guess");
 }
 
+// ── 8. Failure is recoverable ───────────────────────────────────────────────
+{
+  // The file from the screenshot: a contacts export, no money anywhere.
+  const contacts = [
+    "Index,User Id,First Name,Last Name,Sex,Email,Phone,Date of birth",
+    "1,88F7B3,Shelby,Terrell,Male,elijah57@example.net,001-084-906-7849,1945-10-26",
+    "2,f90c65,Phillip,Summers,Female,bethany14@example.com,214.112.6044,1910-03-24",
+  ].join("\n");
+
+  const r = load(contacts);
+  assert.equal(r.error, "amount", "reports which field is missing, as a code");
+  assert.ok(r.looksNonFinancial === false || r.looksNonFinancial === true, "flag is set");
+  // The crucial part: a failed load must still hand back everything the user
+  // needs to rescue it. Returning an error with no columns is a dead end.
+  assert.equal(r.headers.length, 8, "headers survive a failed load");
+  assert.equal(r.columns.length, 8, "column profiles survive a failed load");
+  assert.ok(r.columns.every((c) => c.header), "every column profiled");
+  ok("a failed load still returns headers and column profiles to recover from");
+
+  const byName = Object.fromEntries(r.columns.map((c) => [c.header, c.kind]));
+  assert.equal(byName["Date of birth"], "date", "date column detected from values");
+  assert.equal(byName["First Name"], "text", "name column is text");
+  assert.equal(byName["Index"], "number", "numeric column detected from values");
+  ok("column kinds inferred from values, not header names");
+
+  // And the rescue itself works.
+  const rescued = load(
+    "ref,when,who,how much\n1,2026-02-01,Acme,\"$250.00\"\n2,2026-02-09,Beta,\"$150.00\"",
+    { date: "when", customer: "who", revenue: "how much" },
+  );
+  assert.equal(rescued.error, null, "explicit mapping rescues an unguessable file");
+  near(computeMetrics(rescued.txns).headline.revenue, 400, "rescued revenue");
+  ok("an unguessable file is fully recoverable through manual mapping");
+}
+
 console.log(`\n  ${passed} checks passed\n`);

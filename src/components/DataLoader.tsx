@@ -93,9 +93,9 @@ export function DataLoader({
         <button className="ghost" onClick={() => setShowPaste((v) => !v)}>
           {showPaste ? "Hide paste box" : "Paste CSV text"}
         </button>
-        {result && !result.error && (
+        {result && result.headers.length > 0 && (
           <button className="ghost" onClick={() => setShowMapping((v) => !v)}>
-            {showMapping ? "Hide columns" : "Check columns"}
+            {showMapping || result.error ? "Hide columns" : "Check columns"}
           </button>
         )}
         <button className="ghost" onClick={() => { setText(""); setOverride({}); }} disabled={!text}>
@@ -117,20 +117,44 @@ export function DataLoader({
       )}
 
       {result?.error && (
-        <p className="err">
-          {result.error}{" "}
-          {result.headers.length > 0 && (
-            <>Columns found: {result.headers.slice(0, 8).map((h) => `“${h}”`).join(", ")}
-            {result.headers.length > 8 && "…"}</>
+        <div className="unmapped">
+          <p className="unmapped-head">
+            <span aria-hidden>!</span>
+            Couldn&rsquo;t find {result.error === "date" ? "a date column" : "an amount column"} automatically
+          </p>
+          {result.looksNonFinancial ? (
+            <p className="unmapped-body">
+              None of the {result.headers.length} columns in this file contain numbers,
+              so it doesn&rsquo;t look like sales data. REQUQU needs transaction lines —
+              one row per sale or invoice, with a date and an amount.
+            </p>
+          ) : (
+            <p className="unmapped-body">
+              REQUQU needs two things: a <strong>date</strong> and an{" "}
+              <strong>amount</strong>. It couldn&rsquo;t guess which of your columns
+              those are — pick them below and everything else follows.
+            </p>
           )}
-        </p>
+          <div className="unmapped-cols">
+            {result.columns.slice(0, 14).map((c) => (
+              <span key={c.header} className={`colchip kind-${c.kind}`}>
+                <b>{c.header}</b>
+                {c.sample && <i>{c.sample.length > 18 ? `${c.sample.slice(0, 18)}…` : c.sample}</i>}
+              </span>
+            ))}
+            {result.columns.length > 14 && (
+              <span className="colchip kind-empty"><b>+{result.columns.length - 14} more</b></span>
+            )}
+          </div>
+        </div>
       )}
 
-      {showMapping && result && !result.error && (
+      {(showMapping || result?.error) && result && result.headers.length > 0 && (
         <div className="mapping">
           <p className="card-note" style={{ marginBottom: ".7rem" }}>
-            This is what each of your columns was read as. Change anything that
-            looks wrong — the whole analysis recomputes immediately.
+            {result.error
+              ? "Point Date and Amount at the right columns. Each option shows a sample value from your file so you can pick by looking at the data."
+              : "This is what each of your columns was read as. Change anything that looks wrong — the whole analysis recomputes immediately."}
           </p>
           <div className="map-grid">
             {FIELDS.map((f) => (
@@ -139,11 +163,16 @@ export function DataLoader({
                   {f.label}{f.required && <em title="required"> *</em>}
                 </span>
                 <select
+                  className={f.required && !result.mapping[f.id] ? "needs" : undefined}
                   value={result.mapping[f.id] ?? ""}
                   onChange={(e) => setOverride({ ...override, [f.id]: e.target.value || undefined })}
                 >
                   <option value="">— not used —</option>
-                  {result.headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                  {result.columns.map((c) => (
+                    <option key={c.header} value={c.header}>
+                      {c.header}{c.sample ? `  ·  e.g. ${c.sample.slice(0, 22)}` : ""}
+                    </option>
+                  ))}
                 </select>
               </label>
             ))}

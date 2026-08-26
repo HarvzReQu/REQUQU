@@ -70,6 +70,14 @@ export function inferMapping(headers: string[]): Mapping {
   return mapping;
 }
 
+/** What a column looks like, so the mapping UI can show evidence not just names. */
+export type ColumnProfile = {
+  header: string;
+  /** First non-empty value, for display. */
+  sample: string;
+  kind: "date" | "number" | "text" | "empty";
+};
+
 export type LoadResult = {
   txns: Txn[];
   mapping: Mapping;
@@ -77,9 +85,40 @@ export type LoadResult = {
   /** Rows dropped because they had no usable date or no usable amount. */
   skipped: number;
   total: number;
-  /** Populated when the file cannot be interpreted as sales data at all. */
-  error: string | null;
+  /**
+   * Which required field is missing, or null. A code rather than a sentence so
+   * the UI can render actionable guidance instead of a dead-end string.
+   */
+  error: "date" | "amount" | null;
+  /** Present even on error - it is what lets the user rescue an unmapped file. */
+  columns: ColumnProfile[];
+  /** True when no column anywhere holds a number: this is not sales data. */
+  looksNonFinancial: boolean;
 };
+
+/**
+ * Classify each column from its own values.
+ *
+ * Header names are a hint; the values are the evidence. Showing a sample beside
+ * each column in the mapping UI turns "which of these 30 columns is the amount?"
+ * into a question you can answer by looking.
+ */
+export function profileColumns(table: Table): ColumnProfile[] {
+  return table.headers.map((header, i) => {
+    const values = table.rows.slice(0, 60).map((r) => (r[i] ?? "").trim()).filter(Boolean);
+    const sample = values[0] ?? "";
+    if (values.length === 0) return { header, sample: "", kind: "empty" as const };
+
+    const dates = values.filter((v) => toDate(v) !== null).length;
+    const numbers = values.filter((v) => toNumber(v) !== null).length;
+    // Dates are checked first: "2026" parses as a number too.
+    const kind =
+      dates / values.length > 0.8 && numbers / values.length < 0.8 ? "date"
+      : numbers / values.length > 0.8 ? "number"
+      : "text";
+    return { header, sample, kind };
+  });
+}
 
 export function load(text: string, override?: Mapping): LoadResult {
   const table: Table = parse(text);
@@ -94,12 +133,18 @@ export function load(text: string, override?: Mapping): LoadResult {
     unitPrice: index("unitPrice"), cost: index("cost"), unitCost: index("unitCost"),
   };
 
-  const base = { txns: [], mapping, headers: table.headers, skipped: 0, total: table.rows.length };
+  const columns = profileColumns(table);
+  const looksNonFinancial = !columns.some((c) => c.kind === "number");
+  const base = {
+    txns: [], mapping, headers: table.headers, skipped: 0,
+    total: table.rows.length, columns, looksNonFinancial,
+  };
+
   if (cols.date === -1) {
-    return { ...base, error: "No date column found. Expected something like 'Date' or 'Invoice Date'." };
+    return { ...base, error: "date" };
   }
   if (cols.revenue === -1 && cols.unitPrice === -1) {
-    return { ...base, error: "No amount column found. Expected 'Amount', 'Revenue', 'Total', or 'Unit Price'." };
+    return { ...base, error: "amount" };
   }
 
   const dayFirst = inferDayFirst(table.rows.map((r) => r[cols.date] ?? ""));
@@ -141,5 +186,8 @@ export function load(text: string, override?: Mapping): LoadResult {
     });
   });
 
-  return { txns, mapping, headers: table.headers, skipped, total: table.rows.length, error: null };
+  return {
+    txns, mapping, headers: table.headers, skipped,
+    total: table.rows.length, error: null, columns, looksNonFinancial,
+  };
 }

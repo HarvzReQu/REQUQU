@@ -394,3 +394,43 @@ footer code { font-family: var(--mono); font-size: .95em; }
 }
 .mover:hover { background: var(--surface-2); }
 .mover .rank-val { min-width: 4.6rem; }
+
+/* ─── unrecognised file: guidance, never a dead end ──────────────────────── */
+.unmapped {
+  margin-top: .9rem; padding: .9rem 1rem; border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--warning) 38%, var(--border));
+  border-left: 3px solid var(--warning);
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface-2));
+}
+.unmapped-head {
+  margin: 0 0 .35rem; font-size: .89rem; font-weight: 640;
+  display: flex; align-items: center; gap: .5rem;
+}
+.unmapped-head span {
+  width: 1.05rem; height: 1.05rem; flex-shrink: 0; border-radius: 50%;
+  background: var(--warning); color: #1a1a1a; font-size: .72rem; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.unmapped-body { margin: 0; font-size: .84rem; color: var(--ink-2); line-height: 1.55; }
+.unmapped-cols { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .7rem; }
+.colchip {
+  display: inline-flex; align-items: baseline; gap: .35rem;
+  font-size: .7rem; padding: .2rem .5rem; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.colchip b { font-weight: 620; color: var(--ink); }
+.colchip i { font-style: normal; color: var(--muted); font-family: var(--mono); font-size: .92em; }
+/* Kind is carried by a label-adjacent tint AND remains readable without it. */
+.colchip.kind-number { border-color: color-mix(in srgb, var(--series-1) 45%, transparent); }
+.colchip.kind-date   { border-color: color-mix(in srgb, var(--series-3) 45%, transparent); }
+
+select.needs {
+  border-color: var(--warning);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning) 22%, transparent);
+}
+
+/* Tighter dropzone - it was taking more vertical room than it earned. */
+.dropzone { padding: 1.15rem 1.2rem; }
+.dz-icon { margin-bottom: .35rem; }
+.dz-icon svg { width: 26px; height: 26px; }
+.dz-badges { margin-top: .6rem; }
