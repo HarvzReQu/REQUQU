@@ -36,6 +36,13 @@ CSV  ──▶  delimiter sniff  ──▶  column mapping  ──▶  typed tra
 | **Cohort retention** | monthly acquisition cohorts as a heatmap |
 | **Written findings** | concentration risk, margin erosion, loss-making lines, refund rate, retention |
 | **Reconciliation** | every breakdown re-summed against the headline total |
+| **Currency detection** | read from the amount column's symbol, with an ISO code in a header overriding it; manually switchable |
+| **Data quality panel** | duplicates, month gaps, outliers, zero amounts, blank dimensions, future dates, sign mismatches — each with source row numbers |
+| **Click-to-filter** | click any customer, product or region to scope the entire page to it |
+| **Forecast** | 3-month trend + seasonality projection, hatched so it never reads as recorded fact |
+| **Year over year** | each month against the same month a year earlier |
+| **ABC tiers** | accounts classified A/B/C by cumulative revenue share |
+| **Customer detail** | revenue, orders, AOV, margin, first/last purchase and recency per account |
 | **Export** | summary CSV for a spreadsheet, or a written Markdown report |
 | **Light / dark / system** | applied before first paint, no flash |
 
@@ -193,13 +200,35 @@ tests/
   metrics.test.ts golden dataset, invariants, edge cases
 ```
 
+## Two decisions worth explaining
+
+**Currency was a real defect, not a missing feature.** Every figure was formatted
+as USD regardless of the file, so a `₱19,750.50` export displayed as `$19,751` —
+the application confidently mislabelling money. The symbol is in the source data,
+so it is now read from the raw amount strings *before* coercion strips it, with an
+ISO code in a header (`Amount (GBP)`) outranking an ambiguous `$`. When a file
+carries no currency signal at all, amounts render as plain numbers rather than
+asserting a currency nobody established.
+
+**Quality severity scales with prevalence.** The first version flagged any exact
+duplicate as high severity. Running it against the generated sample surfaced three
+duplicate rows out of 660 — the birthday paradox, not a dirty file, and in a real
+ledger two identical lines can be a genuine repeat order. A checker that cries
+wolf gets ignored, which costs more than the occasional missed duplicate, so
+severity now scales: above 2% of rows it is a double import and the totals are
+overstated; below that it is flagged as worth confirming.
+
 ## Limitations
 
 - **Gross margin only.** No operating expenses, so this is not a P&L.
 - **Cost is all-or-nothing.** Margin is suppressed unless >95% of rows carry a
   cost, because a partially-costed file yields a number that looks precise and
   is wrong.
-- **No currency conversion.** A mixed-currency export is summed as if one currency.
+- **No currency conversion.** The currency is detected and labelled, but a
+  mixed-currency export is still summed as if it were one currency.
+- **The forecast is arithmetic, not statistics.** A least-squares trend with
+  monthly seasonal indices, and the band is the historical fit spread — not a
+  confidence interval. It assumes nothing about the business changes.
 - **Accrual vs cash is whatever the export says.** REQUQU reads dates, it does not
   know your revenue recognition policy.
 - **No browser-level test.** The calculation layer is covered; the React and chart

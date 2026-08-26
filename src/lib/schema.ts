@@ -1,5 +1,6 @@
 import { parse, type Table } from "./csv";
 import { inferDayFirst, toDate, toNumber } from "./coerce";
+import { detectCurrency } from "./currency";
 
 export type Txn = {
   row: number;
@@ -94,6 +95,8 @@ export type LoadResult = {
   columns: ColumnProfile[];
   /** True when no column anywhere holds a number: this is not sales data. */
   looksNonFinancial: boolean;
+  /** ISO code inferred from the amount column, or null when the file gave no signal. */
+  currency: string | null;
 };
 
 /**
@@ -137,7 +140,7 @@ export function load(text: string, override?: Mapping): LoadResult {
   const looksNonFinancial = !columns.some((c) => c.kind === "number");
   const base = {
     txns: [], mapping, headers: table.headers, skipped: 0,
-    total: table.rows.length, columns, looksNonFinancial,
+    total: table.rows.length, columns, looksNonFinancial, currency: null,
   };
 
   if (cols.date === -1) {
@@ -148,6 +151,12 @@ export function load(text: string, override?: Mapping): LoadResult {
   }
 
   const dayFirst = inferDayFirst(table.rows.map((r) => r[cols.date] ?? ""));
+  // Read the symbol from the RAW strings, before toNumber strips it.
+  const amountCol = cols.revenue !== -1 ? cols.revenue : cols.unitPrice;
+  const currency = detectCurrency(
+    table.rows.slice(0, 200).map((r) => r[amountCol] ?? ""),
+    table.headers,
+  );
   const txns: Txn[] = [];
   let skipped = 0;
 
@@ -188,6 +197,6 @@ export function load(text: string, override?: Mapping): LoadResult {
 
   return {
     txns, mapping, headers: table.headers, skipped,
-    total: table.rows.length, error: null, columns, looksNonFinancial,
+    total: table.rows.length, error: null, columns, looksNonFinancial, currency,
   };
 }

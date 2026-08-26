@@ -16,6 +16,10 @@ import { toDate, toNumber, inferDayFirst } from "@/lib/coerce";
 import { load } from "@/lib/schema";
 import { computeMetrics, sliceBy, sum, growth, monthKey, movers, inRange } from "@/lib/metrics";
 import { summaryCsv, reportMarkdown } from "@/lib/export";
+import { detectCurrency, makeFormatters } from "@/lib/currency";
+import { checkQuality } from "@/lib/quality";
+import { forecast } from "@/lib/forecast";
+import { yearOverYear, abc, customerDetail } from "@/lib/metrics";
 import { reconcile, deriveInsights } from "@/lib/insights";
 import { buildSampleCsv } from "@/lib/sample";
 
@@ -309,6 +313,109 @@ const GOLDEN = [
   assert.equal(rescued.error, null, "explicit mapping rescues an unguessable file");
   near(computeMetrics(rescued.txns).headline.revenue, 400, "rescued revenue");
   ok("an unguessable file is fully recoverable through manual mapping");
+}
+
+// ── 9. Currency ─────────────────────────────────────────────────────────────
+{
+  assert.equal(detectCurrency(['"₱12,500.00"', "₱7,250.50"]), "PHP");
+  assert.equal(detectCurrency(["£100.00", "£250.00"]), "GBP");
+  assert.equal(detectCurrency(["$100.00"]), "USD");
+  // Multi-character prefixes must win before a bare "$" claims the value.
+  assert.equal(detectCurrency(["A$100.00", "A$50.00"]), "AUD");
+  assert.equal(detectCurrency(["R$100,00"]), "BRL");
+  // An ISO code in a header is a stronger signal than an ambiguous symbol.
+  assert.equal(detectCurrency(["$100"], ["Date", "Amount (GBP)"]), "GBP");
+  assert.equal(detectCurrency(["100", "250"]), null, "no signal is null, not a guessed USD");
+  ok("currency inferred from symbols, prefixes and header ISO codes");
+
+  const peso = load('Date,Customer,Amount\n2026-01-05,A,"₱12,500.00"\n2026-01-09,B,"₱7,250.50"');
+  assert.equal(peso.currency, "PHP", "the defect case: a peso file is no longer called dollars");
+  const f = makeFormatters(peso.currency);
+  assert.ok(f.money(19750).includes("₱"), `expected a peso symbol, got ${f.money(19750)}`);
+  assert.ok(!makeFormatters(null).money(19750).includes("$"), "unknown currency renders as a plain number");
+  ok("formatters follow the detected currency, and assert nothing when unknown");
+}
+
+// ── 10. Data quality ────────────────────────────────────────────────────────
+{
+  const dirty = [
+    "Date,Customer,Product,Qty,Amount",
+    "2026-01-05,Acme,Widget,1,100",
+    "2026-01-05,Acme,Widget,1,100",
+    "2026-01-05,Acme,Widget,1,100",
+    "2026-03-01,Acme,Widget,1,100",
+    "2026-03-02,Acme,Widget,1,0",
+    "2026-03-03,,Widget,1,100",
+  ].join("\n");
+  const r = load(dirty);
+  const issues = checkQuality(r.txns, { skipped: r.skipped, total: r.total });
+  const ids = new Set(issues.map((i) => i.id));
+
+  assert.ok(ids.has("duplicates"), "two extra copies of an identical row are caught");
+  assert.equal(issues.find((i) => i.id === "duplicates")!.count, 2);
+  assert.ok(ids.has("gaps"), "the missing February is caught");
+  assert.equal(issues.find((i) => i.id === "gaps")!.count, 1);
+  assert.ok(ids.has("zeros"), "the zero-amount line is caught");
+  assert.ok(ids.has("blank-customer"), "the blank customer is caught");
+  // Every issue must point at real source rows, or it is not actionable.
+  for (const i of issues) {
+    assert.ok(i.count > 0, `${i.id} reported with a zero count`);
+    for (const row of i.rows) assert.ok(row >= 2, `${i.id} cited header/invalid row ${row}`);
+  }
+  ok("duplicates, month gaps, zero amounts and blank dimensions all detected");
+
+  // A clean file must stay quiet - a checker that always fires is ignored.
+  const clean = load(buildSampleCsv());
+  const cleanIssues = checkQuality(clean.txns, { skipped: clean.skipped, total: clean.total })
+    .filter((i) => i.severity === "high");
+  assert.equal(cleanIssues.length, 0, `clean sample raised: ${cleanIssues.map((i) => i.id).join(", ")}`);
+  ok("the generated sample raises no high-severity quality issues");
+}
+
+// ── 11. Forecast, YoY, ABC, customer detail ─────────────────────────────────
+{
+  const r = load(buildSampleCsv());
+  const m = computeMetrics(r.txns);
+
+  assert.equal(forecast(m.months.slice(0, 6)), null, "under a year of history refuses to forecast");
+  const f = forecast(m.months, 3)!;
+  assert.equal(f.points.length, 3);
+  for (const p of f.points) {
+    assert.ok(p.value >= 0, "forecast is never negative revenue");
+    assert.ok(p.low <= p.value && p.value <= p.high, "value sits inside its band");
+  }
+  // Months must continue the calendar, including across a year boundary.
+  const lastMonth = m.months[m.months.length - 1]!.month;
+  assert.ok(f.points[0]!.month > lastMonth, "forecast starts after the last actual");
+  const widths = f.points.map((p) => p.high - p.low);
+  assert.ok(widths[2]! > widths[0]!, "uncertainty widens with horizon");
+  ok("forecast: guards short history, stays non-negative, widens with horizon");
+
+  const yoy = yearOverYear(m.months);
+  assert.ok(yoy.length > 0, "18 months of sample yields year-over-year pairs");
+  for (const p of yoy) {
+    const [y, mm] = p.month.split("-");
+    assert.ok(m.months.some((x) => x.month === `${Number(y) - 1}-${mm}`), "prior-year month exists");
+  }
+  ok("year-over-year pairs each month with the same month a year earlier");
+
+  const tiers = abc(sliceBy(r.txns, "customer"));
+  assert.equal(tiers.length, sliceBy(r.txns, "customer").length, "tiering loses nobody");
+  assert.ok(tiers[0]!.tier === "A", "the largest account is tier A");
+  const order = { A: 0, B: 1, C: 2 };
+  assert.deepEqual(tiers.map((t) => order[t.tier]), [...tiers.map((t) => order[t.tier])].sort(),
+    "tiers never go backwards down a revenue-sorted list");
+  ok("ABC tiers assigned by cumulative revenue share, monotonically");
+
+  const detail = customerDetail(r.txns);
+  near(sum(detail.map((d) => d.revenue)), m.headline.revenue, "customer detail sums to the total");
+  assert.equal(detail.length, m.headline.customers, "one row per customer");
+  for (const d of detail) {
+    assert.ok(d.last >= d.first, `${d.customer}: last order before first`);
+    assert.ok(d.tenureDays >= 0 && d.recencyDays >= 0, `${d.customer}: negative day count`);
+    near(d.aov, d.revenue / d.orders, `${d.customer} AOV`);
+  }
+  ok("customer detail: totals reconcile, dates ordered, AOV consistent");
 }
 
 console.log(`\n  ${passed} checks passed\n`);

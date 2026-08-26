@@ -434,3 +434,53 @@ select.needs {
 .dz-icon { margin-bottom: .35rem; }
 .dz-icon svg { width: 26px; height: 26px; }
 .dz-badges { margin-top: .6rem; }
+
+/* ─── data quality ───────────────────────────────────────────────────────── */
+.card.quality.has-high { border-color: color-mix(in srgb, var(--critical) 35%, var(--border)); }
+.qissue {
+  display: flex; gap: .75rem; padding: .7rem .85rem; margin-bottom: .5rem;
+  border-radius: var(--r-md); background: var(--surface-2);
+  border: 1px solid var(--border-2); border-left: 3px solid var(--muted);
+}
+.qissue:last-child { margin-bottom: 0; }
+.qissue.sev-high { border-left-color: var(--critical); background: color-mix(in srgb, var(--critical) 5%, var(--surface-2)); }
+.qissue.sev-medium { border-left-color: var(--warning); background: color-mix(in srgb, var(--warning) 5%, var(--surface-2)); }
+.qissue.sev-low { border-left-color: var(--series-1); }
+.qsev {
+  font-size: .6rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  padding: .2rem .4rem; border-radius: 4px; height: fit-content; flex-shrink: 0;
+  background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+}
+.sev-high .qsev { color: var(--critical); border-color: color-mix(in srgb, var(--critical) 40%, transparent); }
+.sev-medium .qsev { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
+.qissue h4 { margin: 0 0 .18rem; font-size: .88rem; font-weight: 640; }
+.qissue p { margin: 0; font-size: .82rem; color: var(--ink-2); line-height: 1.5; }
+.qmeta { margin-top: .3rem !important; font-size: .74rem !important; color: var(--muted) !important; font-family: var(--mono); }
+
+/* ─── focus / drill-down ─────────────────────────────────────────────────── */
+.focus-bar {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  padding: .55rem .9rem; margin-bottom: 1rem; border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--series-1) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--series-1) 38%, transparent);
+  font-size: .86rem;
+}
+.focus-bar > span:first-child { flex: 1; }
+.focus-bar .muted { color: var(--muted); }
+.rank-row.clickable { cursor: pointer; }
+.rank-row.on { background: color-mix(in srgb, var(--series-1) 12%, transparent); }
+tr.clickable { cursor: pointer; }
+
+/* ─── ABC tiers ──────────────────────────────────────────────────────────── */
+.tier {
+  display: inline-block; font-size: .62rem; font-weight: 800; line-height: 1;
+  padding: .2rem .32rem; border-radius: 4px; margin-right: .4rem;
+  border: 1px solid var(--border); color: var(--muted); background: var(--surface);
+}
+/* Ordinal, so a single-hue ramp - never three categorical colours. */
+.tier.t-A { background: var(--seq-500); color: #fff; border-color: transparent; }
+.tier.t-B { background: var(--seq-300); color: #0b0b0b; border-color: transparent; }
+.tier.t-C { background: var(--seq-100); color: #0b0b0b; border-color: transparent; }
+
+.stale { color: var(--warning); font-weight: 650; }
+.divider { width: 1px; align-self: stretch; background: var(--border); margin: 0 .25rem; }

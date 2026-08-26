@@ -17,9 +17,17 @@
  *     the ordering already carries the magnitude.
  */
 
-export const fmtMoney = (n: number, compact = false): string =>
-  n.toLocaleString("en-US", {
-    style: "currency", currency: "USD",
+/**
+ * Charts render money through an injected formatter rather than a hardcoded one.
+ * The previous module-level USD constant meant a ₱ file rendered as dollars -
+ * the application asserting a currency it had no evidence for.
+ */
+export type MoneyFmt = (n: number, compact?: boolean) => string;
+
+/** Fallback only, for charts rendered before a file is loaded. */
+export const fmtMoney: MoneyFmt = (n, compact = false) =>
+  n.toLocaleString(undefined, {
+    style: "decimal",
     maximumFractionDigits: compact && Math.abs(n) >= 1000 ? 1 : 0,
     notation: compact && Math.abs(n) >= 10000 ? "compact" : "standard",
   });
@@ -82,22 +90,26 @@ export function Sparkline({
 
 // ─────────────────────────────────────────────────────────── column chart ───
 export function ColumnChart({
-  data, title, note,
+  data, title, note, money = fmtMoney, forecast = [],
 }: {
   data: { label: string; value: number }[];
   title: string;
   note?: string;
+  money?: MoneyFmt;
+  /** Projected months, drawn hatched so they never read as recorded fact. */
+  forecast?: { label: string; value: number; low: number; high: number }[];
 }) {
   const W = 720, H = 240, L = 56, R = 8, T = 12, B = 30;
   const plotW = W - L - R, plotH = H - T - B;
 
-  const max = niceMax(Math.max(0, ...data.map((d) => d.value)));
+  const all = [...data.map((d) => d.value), ...forecast.map((f) => f.high)];
+  const max = niceMax(Math.max(0, ...all));
   const min = Math.min(0, ...data.map((d) => d.value));
   const floor = min < 0 ? -niceMax(-min) : 0;
   const range = max - floor;
 
   const y = (v: number) => T + plotH - ((v - floor) / range) * plotH;
-  const slot = plotW / Math.max(1, data.length);
+  const slot = plotW / Math.max(1, data.length + forecast.length);
   const gap = 2;                       // 2px surface gap between adjacent bars
   const barW = Math.max(3, slot - gap * 2);
   const radius = Math.min(4, barW / 2); // 4px rounded data-end
@@ -123,12 +135,19 @@ export function ColumnChart({
             <stop offset="0%" stopColor="var(--critical)" stopOpacity="0.62" />
             <stop offset="100%" stopColor="var(--critical)" />
           </linearGradient>
+          {/* Texture, not a second hue: projected months must be visibly
+              different from recorded ones without implying a new series. */}
+          <pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse"
+                   patternTransform="rotate(45)">
+            <rect width="5" height="5" fill="var(--surface)" />
+            <line x1="0" y1="0" x2="0" y2="5" stroke="var(--series-1)" strokeWidth="2.4" opacity="0.5" />
+          </pattern>
         </defs>
         {ticks.map((t, i) => (
           <g key={i}>
             <line className="grid-line" x1={L} y1={y(t)} x2={W - R} y2={y(t)} />
             <text className="tick" x={L - 8} y={y(t) + 3} textAnchor="end">
-              {fmtMoney(t, true)}
+              {money(t, true)}
             </text>
           </g>
         ))}
@@ -148,16 +167,41 @@ export function ColumnChart({
               <path className="bar" d={path} fill={d.value >= 0 ? "url(#barFill)" : "url(#barNeg)"} />
               {labelled.has(i) && (
                 <text className="mark-label" x={x + barW / 2} y={top - 5} textAnchor="middle">
-                  {fmtMoney(d.value, true)}
+                  {money(d.value, true)}
                 </text>
               )}
               {/* Hit target spans the whole slot, not just the bar. */}
               <rect x={L + slot * i} y={T} width={slot} height={plotH} fill="transparent">
-                <title>{`${d.label}\n${fmtMoney(d.value)}`}</title>
+                <title>{`${d.label}\n${money(d.value)}`}</title>
               </rect>
               {(i % Math.ceil(data.length / 9) === 0 || i === data.length - 1) && (
                 <text className="tick" x={x + barW / 2} y={H - 10} textAnchor="middle">
                   {monthLabel(d.label)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+
+        {forecast.map((f, i) => {
+          const idx = data.length + i;
+          const x = L + slot * idx + gap;
+          const top = y(f.value);
+          const h = Math.max(1, zeroY - top);
+          return (
+            <g key={f.label}>
+              {/* Range first, so the point estimate reads on top of it. */}
+              <rect x={x} y={y(f.high)} width={barW} height={Math.max(1, y(f.low) - y(f.high))}
+                    fill="var(--series-1)" opacity="0.12" rx="3" />
+              <rect className="bar" x={x} y={top} width={barW} height={h}
+                    fill="url(#hatch)" stroke="var(--series-1)" strokeWidth="1"
+                    strokeDasharray="3 2" rx="3" opacity="0.9" />
+              <rect x={L + slot * idx} y={T} width={slot} height={plotH} fill="transparent">
+                <title>{`${f.label} (projected)\n${money(f.value)}\nrange ${money(f.low)} – ${money(f.high)}`}</title>
+              </rect>
+              {i === forecast.length - 1 && (
+                <text className="tick" x={x + barW / 2} y={H - 10} textAnchor="middle">
+                  {monthLabel(f.label)}
                 </text>
               )}
             </g>
@@ -210,6 +254,13 @@ export function LineChart({
             <stop offset="0%" stopColor="var(--critical)" stopOpacity="0.62" />
             <stop offset="100%" stopColor="var(--critical)" />
           </linearGradient>
+          {/* Texture, not a second hue: projected months must be visibly
+              different from recorded ones without implying a new series. */}
+          <pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse"
+                   patternTransform="rotate(45)">
+            <rect width="5" height="5" fill="var(--surface)" />
+            <line x1="0" y1="0" x2="0" y2="5" stroke="var(--series-1)" strokeWidth="2.4" opacity="0.5" />
+          </pattern>
         </defs>
         {ticks.map((t, i) => (
           <g key={i}>
@@ -262,11 +313,14 @@ export function LineChart({
  * compared against the bars.
  */
 export function RankedBars({
-  data, title, note,
+  data, title, note, money = fmtMoney, onSelect, selected,
 }: {
-  data: { key: string; revenue: number; share: number; cumulativeShare: number }[];
+  data: { key: string; revenue: number; share: number; cumulativeShare: number; tier?: "A" | "B" | "C" }[];
   title: string;
   note?: string;
+  money?: MoneyFmt;
+  onSelect?: (key: string) => void;
+  selected?: string | null;
 }) {
   if (data.length === 0) return null;
   const max = Math.max(...data.map((d) => Math.abs(d.revenue)));
@@ -277,14 +331,22 @@ export function RankedBars({
       {note && <p className="card-note">{note}</p>}
       <div>
         {data.map((d) => (
-          <div key={d.key} className="rank-row">
-            <span className="rank-name" title={d.key}>{d.key}</span>
+          <div key={d.key}
+               className={`rank-row${onSelect ? " clickable" : ""}${selected === d.key ? " on" : ""}`}
+               onClick={onSelect && !d.key.startsWith("Other (") ? () => onSelect(d.key) : undefined}
+               role={onSelect ? "button" : undefined}
+               tabIndex={onSelect ? 0 : undefined}
+               onKeyDown={onSelect ? (e) => { if (e.key === "Enter") onSelect(d.key); } : undefined}>
+            <span className="rank-name" title={d.key}>
+              {d.tier && <b className={`tier t-${d.tier}`}>{d.tier}</b>}
+              {d.key}
+            </span>
             <span className="rank-track">
               {/* One hue for every bar: rank is already encoded by position. */}
               <span className={`rank-fill${d.revenue < 0 ? " neg" : ""}`}
                     style={{ width: `${Math.max(1, (Math.abs(d.revenue) / max) * 100)}%` }} />
             </span>
-            <span className="rank-val">{fmtMoney(d.revenue, true)}</span>
+            <span className="rank-val">{money(d.revenue, true)}</span>
             <span className="rank-cum" title="cumulative share of revenue">
               {fmtPct(d.cumulativeShare * 100, 0)}
             </span>

@@ -328,3 +328,87 @@ export function inRange(txns: Txn[], from: Date | null, to: Date | null): Txn[] 
     (t) => (!from || t.date >= from) && (!to || t.date <= to),
   );
 }
+
+// ───────────────────────────────────────────────────── year over year ───────
+export type YoyPoint = { month: string; current: number; priorYear: number; changePct: number | null };
+
+/** Same calendar month a year earlier - the comparison that removes seasonality. */
+export function yearOverYear(months: MonthPoint[]): YoyPoint[] {
+  const byMonth = new Map(months.map((m) => [m.month, m.revenue]));
+  const out: YoyPoint[] = [];
+  for (const m of months) {
+    const [y, mm] = m.month.split("-").map(Number) as [number, number];
+    const prior = byMonth.get(`${y - 1}-${String(mm).padStart(2, "0")}`);
+    if (prior === undefined) continue;
+    out.push({ month: m.month, current: m.revenue, priorYear: prior, changePct: growth(m.revenue, prior) });
+  }
+  return out;
+}
+
+// ──────────────────────────────────────────────────────── ABC tiers ─────────
+export type Tier = "A" | "B" | "C";
+export type TieredSlice = Slice & { tier: Tier };
+
+/**
+ * ABC classification by cumulative revenue: A is the top 80% of revenue, B the
+ * next 15%, C the remainder. The standard inventory/account segmentation, and
+ * the reason it matters is that the three tiers deserve different service
+ * levels - not that the split is interesting on its own.
+ */
+export function abc(slices: Slice[]): TieredSlice[] {
+  return slices.map((s) => ({
+    ...s,
+    tier: s.cumulativeShare <= 0.8 ? "A" : s.cumulativeShare <= 0.95 ? "B" : "C",
+  }));
+}
+
+// ─────────────────────────────────────────────────── customer detail ────────
+export type CustomerDetail = {
+  customer: string;
+  revenue: number;
+  orders: number;
+  units: number;
+  aov: number;
+  first: Date;
+  last: Date;
+  /** Days between first and last order; 0 for a single-purchase customer. */
+  tenureDays: number;
+  /** Days from the last order to the end of the dataset. */
+  recencyDays: number;
+  marginPct: number | null;
+};
+
+export function customerDetail(txns: Txn[], asOf?: Date): CustomerDetail[] {
+  if (txns.length === 0) return [];
+  const end = asOf ?? txns.reduce((m, t) => (t.date > m ? t.date : m), txns[0]!.date);
+
+  const groups = new Map<string, Txn[]>();
+  for (const t of txns) {
+    const list = groups.get(t.customer);
+    if (list) list.push(t);
+    else groups.set(t.customer, [t]);
+  }
+
+  const DAY = 86_400_000;
+  return [...groups.entries()]
+    .map(([customer, list]) => {
+      const revenue = sum(list.map((t) => t.revenue));
+      const dates = list.map((t) => t.date.getTime());
+      const first = new Date(Math.min(...dates));
+      const last = new Date(Math.max(...dates));
+      const costed = list.filter((t) => t.cost !== null);
+      const cost = costed.length === list.length ? sum(costed.map((t) => t.cost!)) : null;
+      return {
+        customer,
+        revenue,
+        orders: list.length,
+        units: sum(list.map((t) => t.quantity)),
+        aov: revenue / list.length,
+        first, last,
+        tenureDays: Math.round((last.getTime() - first.getTime()) / DAY),
+        recencyDays: Math.round((end.getTime() - last.getTime()) / DAY),
+        marginPct: cost === null || revenue === 0 ? null : ((revenue - cost) / revenue) * 100,
+      };
+    })
+    .sort((a, b) => b.revenue - a.revenue);
+}
